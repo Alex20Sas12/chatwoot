@@ -1,0 +1,37 @@
+name: demo-chatwoot
+
+on:
+  workflow_dispatch:
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Up
+        run: |
+          mkdir -p .cw && cd .cw
+          curl -sL -o compose.yml https://raw.githubusercontent.com/chatwoot/chatwoot/develop/docker-compose.production.yaml
+          curl -sL -o .env https://raw.githubusercontent.com/chatwoot/chatwoot/develop/.env.example
+          {
+            echo SECRET_KEY_BASE=$(openssl rand -hex 32)
+            echo FRONTEND_URL=http://localhost:3000
+            echo POSTGRES_HOST=postgres
+            echo POSTGRES_USERNAME=chatwoot
+            echo POSTGRES_PASSWORD=cw_demo_pw
+            echo REDIS_URL=redis://redis:6379
+            echo INSTALLATION_ENV=github-action
+          } >> .env
+          docker compose up -d
+          for i in $(seq 1 60); do sleep 5; docker compose exec -T web curl -sf http://localhost:3000 >/dev/null && break; done
+          docker compose exec -T web bundle exec rails db:chatwoot_prepare || true
+          echo CHATWOOT-UP
+      - name: Tunnel
+        run: |
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+          chmod +x /usr/local/bin/cloudflared
+          cd .cw
+          cloudflared tunnel --url http://localhost:3000 --no-autoupdate > tunnel.log 2>&1 &
+          for i in $(seq 1 18); do sleep 10; URL=$(grep -oE 'https://[a-z0-9-]+[.]trycloudflare[.]com' tunnel.log | head -1); if [ -n "$URL" ]; then echo PUBLIC-DEMO-URL: $URL; break; fi; done
+      - name: Hold
+        run: sleep 21000
