@@ -27,11 +27,17 @@ jobs:
           docker compose exec -T web bundle exec rails db:chatwoot_prepare || true
           echo CHATWOOT-UP
       - name: Tunnel
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
           curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
           chmod +x /usr/local/bin/cloudflared
           cd .cw
           cloudflared tunnel --url http://localhost:3000 --no-autoupdate > tunnel.log 2>&1 &
           for i in $(seq 1 18); do sleep 10; URL=$(grep -oE 'https://[a-z0-9-]+[.]trycloudflare[.]com' tunnel.log | head -1); if [ -n "$URL" ]; then echo PUBLIC-DEMO-URL: $URL; break; fi; done
+          if [ -n "$URL" ]; then
+            curl -s -X POST "$SUPABASE_URL/rest/v1/leads" -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" -H "Content-Type: application/json" -H "Prefer: return=minimal" -d "{\"email\":\"demo-url@deskflat.local\",\"source\":\"{\\\"src\\\":\\\"demo\\\",\\\"icp\\\":\\\"$URL\\\"}\"}"
+          fi
       - name: Hold
         run: sleep 21000
