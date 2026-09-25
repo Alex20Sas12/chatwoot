@@ -44,7 +44,7 @@ jobs:
           echo FRONTEND_URL=$URL >> .env
           echo "$URL" > ../demo_url.txt
           if [ -n "$URL" ]; then
-            curl -s -X POST "$SUPABASE_URL/rest/v1/leads" -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" -H "Content-Type: application/json" -H "Prefer: return=minimal" -d "{\"email\":\"demo-url@deskflat.local\",\"source\":\"{\\\"src\\\":\\\"demo\\\",\\\"icp\\\":\\\"$URL\\\"}\"}"
+            curl -s -X POST "$SUPABASE_URL/rest/v1/leads" -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" -H "Content-Type: application/json" -H "Prefer: return=minimal" -d "{\"email\":\"demo-url-$(date +%s)@deskflat.local\",\"source\":\"{\\\"src\\\":\\\"demo\\\",\\\"icp\\\":\\\"$URL\\\"}\"}"
           fi
       - name: Up
         run: |
@@ -53,9 +53,11 @@ jobs:
           docker compose run --rm rails bundle exec rails db:chatwoot_prepare
           docker compose up -d rails sidekiq
           ok=""
-          for i in $(seq 1 90); do sleep 5; if docker compose exec -T rails curl -sf http://localhost:3000 >/dev/null 2>&1; then ok=1; break; fi; done
+          # curl С РАННЕРА: порт 3000 проброшен на 127.0.0.1, а внутри alpine-контейнера curl нет (урок 36195055010)
+          for i in $(seq 1 90); do sleep 5; if curl -sf http://127.0.0.1:3000/api -o /dev/null 2>&1; then ok=1; break; fi; done
           if [ -z "$ok" ]; then echo '=== PS ==='; docker compose ps -a; echo '=== RAILS LOGS ==='; docker compose logs rails --tail 120; exit 1; fi
           echo CHATWOOT-UP
-          curl -sf "$(cat ../demo_url.txt)" -o /dev/null && echo TUNNEL-OK || echo TUNNEL-CHECK-FAIL
+          sleep 15
+          curl -sf "$(cat ../demo_url.txt)/api" -o /dev/null && echo TUNNEL-OK || echo TUNNEL-CHECK-FAIL
       - name: Hold
         run: sleep 21000
