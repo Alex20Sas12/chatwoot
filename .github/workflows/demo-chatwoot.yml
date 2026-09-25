@@ -22,8 +22,11 @@ jobs:
             echo REDIS_URL=redis://redis:6379
             echo INSTALLATION_ENV=github-action
           } >> .env
+          docker compose pull
           docker compose up -d
-          for i in $(seq 1 60); do sleep 5; docker compose exec -T web curl -sf http://localhost:3000 >/dev/null && break; done
+          ok=""
+          for i in $(seq 1 90); do sleep 5; if docker compose exec -T web curl -sf http://localhost:3000 >/dev/null 2>&1; then ok=1; break; fi; done
+          if [ -z "$ok" ]; then echo "=== PS ==="; docker compose ps -a; echo "=== WEB LOGS ==="; docker compose logs web --tail 80; exit 1; fi
           docker compose exec -T web bundle exec rails db:chatwoot_prepare || true
           echo CHATWOOT-UP
       - name: Tunnel
